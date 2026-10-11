@@ -1,0 +1,4 @@
+product_id,product_name,brand,category,pack_size,price,stock_status
+MILK001,Toned Milk,Amul,Milk & Dairy,1 L,68,In stock
+MILK002,Toned Milk,Milma,Milk & Dairy,1 L,56,In stock
+BISC001,Marie Biscuits,Britannia,Biscuits & Cookies,250 g,38,In stock
