@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-CATALOGUE_FILE = Path(__file__).with_name("smartcart_catalogue.csv")
+CATALOGUE_FILE = Path(__file__).with_name("smartcart_supermarket_dataset.csv")
 PAGE_SIZE = 20
 COLUMNS = 4
 AVAILABLE = ("in stock", "low stock")
