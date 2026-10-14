@@ -1,0 +1,126 @@
+product_id,product_name,brand,category,pack_size,price,stock_status
+MILK001,Toned Milk,Amul,Milk & Dairy,1 L,68,In stock
+MILK002,Toned Milk,Milma,Milk & Dairy,1 L,56,In stock
+MILK003,Full Cream Milk,Amul,Milk & Dairy,1 L,74,In stock
+MILK004,Curd,Milma,Milk & Dairy,500 g,35,In stock
+MILK005,Curd,Amul,Milk & Dairy,500 g,38,In stock
+MILK006,Butter,Amul,Milk & Dairy,100 g,58,In stock
+MILK007,Ghee,Milma,Milk & Dairy,500 ml,310,In stock
+MILK008,Paneer,Amul,Milk & Dairy,200 g,95,In stock
+MILK009,Cheese Slices,Amul,Milk & Dairy,200 g,135,In stock
+MILK010,Fresh Cream,Amul,Milk & Dairy,250 ml,65,In stock
+GRAI001,Matta Rice,Double Horse,"Rice, Grains & Flour",1 kg,75,In stock
+GRAI002,Raw Rice,Local Brand,"Rice, Grains & Flour",1 kg,62,In stock
+GRAI003,Basmati Rice,India Gate,"Rice, Grains & Flour",1 kg,145,In stock
+GRAI004,Wheat Flour,Aashirvaad,"Rice, Grains & Flour",1 kg,62,In stock
+GRAI005,Maida,Local Brand,"Rice, Grains & Flour",1 kg,48,In stock
+GRAI006,Rava / Semolina,Double Horse,"Rice, Grains & Flour",500 g,42,In stock
+GRAI007,Puttu Podi,Double Horse,"Rice, Grains & Flour",1 kg,78,In stock
+GRAI008,Appam Podi,Double Horse,"Rice, Grains & Flour",1 kg,82,In stock
+GRAI009,Poha / Aval,Local Brand,"Rice, Grains & Flour",500 g,45,In stock
+GRAI010,Oats,Quaker,"Rice, Grains & Flour",500 g,115,In stock
+PULS001,Toor Dal,Tata Sampann,Pulses & Beans,500 g,95,In stock
+PULS002,Moong Dal,Tata Sampann,Pulses & Beans,500 g,78,In stock
+PULS003,Masoor Dal,Tata Sampann,Pulses & Beans,500 g,72,In stock
+PULS004,Chana Dal,Local Brand,Pulses & Beans,500 g,58,In stock
+PULS005,Chickpeas / Kadala,Local Brand,Pulses & Beans,500 g,65,In stock
+PULS006,Green Gram / Cherupayar,Local Brand,Pulses & Beans,500 g,68,In stock
+PULS007,Black Gram / Uzhunnu,Local Brand,Pulses & Beans,500 g,75,In stock
+PULS008,Kidney Beans / Rajma,Local Brand,Pulses & Beans,500 g,85,In stock
+VEGE001,Onion,Fresh Produce,Vegetables,1 kg,45,In stock
+VEGE002,Tomato,Fresh Produce,Vegetables,1 kg,40,In stock
+VEGE003,Potato,Fresh Produce,Vegetables,1 kg,38,In stock
+VEGE004,Green Chilli,Fresh Produce,Vegetables,100 g,15,In stock
+VEGE005,Ginger,Fresh Produce,Vegetables,100 g,20,In stock
+VEGE006,Garlic,Fresh Produce,Vegetables,250 g,45,In stock
+VEGE007,Curry Leaves,Fresh Produce,Vegetables,1 bunch,10,In stock
+VEGE008,Coriander Leaves,Fresh Produce,Vegetables,1 bunch,15,In stock
+VEGE009,Coconut,Fresh Produce,Vegetables,1 piece,35,In stock
+VEGE010,Grated Coconut,Fresh Produce,Vegetables,200 g,45,In stock
+VEGE011,Carrot,Fresh Produce,Vegetables,500 g,35,In stock
+VEGE012,Beans,Fresh Produce,Vegetables,500 g,40,In stock
+VEGE013,Cabbage,Fresh Produce,Vegetables,1 piece,35,In stock
+VEGE014,Cauliflower,Fresh Produce,Vegetables,1 piece,45,In stock
+VEGE015,Brinjal / Eggplant,Fresh Produce,Vegetables,500 g,35,In stock
+VEGE016,Okra / Ladies Finger,Fresh Produce,Vegetables,500 g,38,In stock
+VEGE017,Drumstick,Fresh Produce,Vegetables,250 g,30,In stock
+VEGE018,Pumpkin,Fresh Produce,Vegetables,500 g,30,In stock
+VEGE019,Spinach,Fresh Produce,Vegetables,1 bunch,25,In stock
+VEGE020,Green Peas,Fresh Produce,Vegetables,250 g,45,In stock
+VEGE021,Cucumber,Fresh Produce,Vegetables,500 g,28,In stock
+VEGE022,Lemon,Fresh Produce,Vegetables,4 pieces,20,In stock
+VEGE023,Raw Banana,Fresh Produce,Vegetables,500 g,30,In stock
+VEGE024,Yam / Chena,Fresh Produce,Vegetables,500 g,40,In stock
+FRUI001,Banana,Fresh Produce,Fruits,1 dozen,60,In stock
+FRUI002,Apple,Fresh Produce,Fruits,1 kg,180,In stock
+FRUI003,Orange,Fresh Produce,Fruits,1 kg,100,In stock
+FRUI004,Mango,Fresh Produce,Fruits,1 kg,120,In stock
+FRUI005,Papaya,Fresh Produce,Fruits,1 piece,55,In stock
+FRUI006,Watermelon,Fresh Produce,Fruits,1 piece,90,In stock
+FRUI007,Grapes,Fresh Produce,Fruits,500 g,75,In stock
+MEAT001,Chicken,Fresh Counter,Meat & Seafood,1 kg,240,In stock
+MEAT002,Chicken Breast,Fresh Counter,Meat & Seafood,500 g,155,In stock
+MEAT003,Beef,Fresh Counter,Meat & Seafood,1 kg,380,In stock
+MEAT004,Mutton,Fresh Counter,Meat & Seafood,500 g,420,In stock
+MEAT005,Eggs,Farm Fresh,Meat & Seafood,6 pieces,48,In stock
+MEAT006,Eggs,Farm Fresh,Meat & Seafood,12 pieces,92,In stock
+MEAT007,Sardine / Mathi,Fresh Counter,Meat & Seafood,500 g,110,In stock
+MEAT008,Seer Fish / Neymeen,Fresh Counter,Meat & Seafood,500 g,320,In stock
+MEAT009,Prawns,Fresh Counter,Meat & Seafood,250 g,180,In stock
+MEAT010,Tuna,Fresh Counter,Meat & Seafood,500 g,190,In stock
+OILS001,Coconut Oil,KLF,Oils & Condiments,1 L,245,In stock
+OILS002,Sunflower Oil,Fortune,Oils & Condiments,1 L,145,In stock
+OILS003,Olive Oil,Figaro,Oils & Condiments,250 ml,280,In stock
+OILS004,Mustard Seeds,Local Brand,Oils & Condiments,100 g,28,In stock
+OILS005,Cumin Seeds,Local Brand,Oils & Condiments,100 g,42,In stock
+OILS006,Black Pepper,Eastern,Oils & Condiments,100 g,85,In stock
+OILS007,Vinegar,Madhus,Oils & Condiments,500 ml,48,In stock
+OILS008,Soy Sauce,Ching's Secret,Oils & Condiments,200 ml,65,In stock
+OILS009,Tomato Ketchup,Kissan,Oils & Condiments,500 g,105,In stock
+OILS010,Coconut Milk,MTR,Oils & Condiments,200 ml,55,In stock
+SPIC001,Turmeric Powder,Eastern,Spices & Masala,100 g,38,In stock
+SPIC002,Chilli Powder,Eastern,Spices & Masala,100 g,42,In stock
+SPIC003,Coriander Powder,Eastern,Spices & Masala,100 g,40,In stock
+SPIC004,Garam Masala,Eastern,Spices & Masala,100 g,55,In stock
+SPIC005,Sambar Powder,Eastern,Spices & Masala,100 g,48,In stock
+SPIC006,Rasam Powder,Eastern,Spices & Masala,100 g,45,In stock
+SPIC007,Chicken Masala,Eastern,Spices & Masala,100 g,52,In stock
+SPIC008,Fish Masala,Eastern,Spices & Masala,100 g,50,In stock
+SPIC009,Biriyani Masala,Eastern,Spices & Masala,100 g,58,In stock
+SPIC010,Mustard Seeds Powder,Local Brand,Spices & Masala,50 g,25,In stock
+SPIC011,Cardamom,Local Brand,Spices & Masala,25 g,65,In stock
+SPIC012,Cinnamon,Local Brand,Spices & Masala,50 g,45,In stock
+SPIC013,Cloves,Local Brand,Spices & Masala,25 g,42,In stock
+SPIC014,Fenugreek Seeds,Local Brand,Spices & Masala,100 g,28,In stock
+SPIC015,Fennel Seeds,Local Brand,Spices & Masala,100 g,35,In stock
+SPIC016,Asafoetida / Hing,Local Brand,Spices & Masala,25 g,32,In stock
+COOK001,Sugar,Madhur,Baking & Cooking,1 kg,48,In stock
+COOK002,Salt,Tata,Baking & Cooking,1 kg,28,In stock
+COOK003,Jaggery,Local Brand,Baking & Cooking,500 g,45,In stock
+COOK004,Baking Soda,Weikfield,Baking & Cooking,100 g,25,In stock
+COOK005,Baking Powder,Weikfield,Baking & Cooking,100 g,35,In stock
+COOK006,Corn Flour,Weikfield,Baking & Cooking,500 g,65,In stock
+COOK007,Yeast,Blue Bird,Baking & Cooking,25 g,20,In stock
+COOK008,Lemon Juice,Local Brand,Baking & Cooking,200 ml,35,In stock
+COOK009,Tamarind,Local Brand,Baking & Cooking,200 g,35,In stock
+COOK010,Peanut,Local Brand,Baking & Cooking,250 g,55,In stock
+SNAC001,Marie Biscuits,Britannia,Biscuits & Cookies,250 g,38,In stock
+SNAC002,Good Day Biscuits,Britannia,Biscuits & Cookies,200 g,35,In stock
+SNAC003,Cream Biscuits,Sunfeast,Biscuits & Cookies,150 g,25,In stock
+SNAC004,Potato Chips,Lay's,Snacks,50 g,20,In stock
+SNAC005,Mixture,Local Brand,Snacks,200 g,55,In stock
+SNAC006,Banana Chips,Local Brand,Snacks,200 g,70,In stock
+SNAC007,Instant Noodles,Maggi,Instant Food,70 g,15,In stock
+SNAC008,Pasta,Bambino,Instant Food,500 g,65,In stock
+SNAC009,Vermicelli,Bambino,Instant Food,400 g,48,In stock
+SNAC010,Bread,Modern,Bakery,400 g,40,In stock
+DRIN001,Tea Powder,Tata Tea,Beverages,250 g,125,In stock
+DRIN002,Coffee Powder,Bru,Beverages,100 g,95,In stock
+DRIN003,Drinking Water,Bisleri,Beverages,1 L,20,In stock
+DRIN004,Orange Juice,Real,Beverages,1 L,115,In stock
+DRIN005,Lime Soda,Local Brand,Beverages,250 ml,25,In stock
+HOME001,Dishwash Liquid,Vim,Household,500 ml,115,In stock
+HOME002,Laundry Detergent,Surf Excel,Household,1 kg,145,In stock
+HOME003,Toilet Cleaner,Harpic,Household,500 ml,105,In stock
+HOME004,Tissue Paper,Origami,Household,1 pack,55,In stock
+HOME005,Garbage Bags,Local Brand,Household,30 bags,75,In stock
