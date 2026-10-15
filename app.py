@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 import zlib
 from contextlib import closing
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-CATALOGUE_FILE = Path(__file__).with_name("smartcart_supermarket_dataset.csv")
+CATALOGUE_FILE = Path(__file__).with_name("smartcart_catalogue.csv")
 PAGE_SIZE = 20
 COLUMNS = 4
 AVAILABLE = ("in stock", "low stock")
@@ -117,21 +117,7 @@ def prepare_catalogue(df):
     for col in ["product_id", "product_name", "brand", "category", "pack_size", "stock_status", "aisle"]:
         df[col] = df[col].fillna("").astype(str).str.strip()
     df["stock_status"] = df["stock_status"].replace("", "In stock")
-    # Demo store locations: replace these aisle codes with your real supermarket layout.
-    category_aisles = {
-        "milk & dairy": "B1", "dairy and eggs": "B1",
-        "rice, grains & flour": "C1", "rice, flour and pulses": "C1",
-        "pulses & beans": "C2", "vegetables": "A1", "fruits": "A2",
-        "meat & seafood": "D1", "oils & condiments": "C3",
-        "spices & masala": "C4", "baking & cooking": "C4",
-        "biscuits & cookies": "E1", "snacks": "E2", "instant food": "E2",
-        "bakery": "E1", "beverages": "E3", "household": "H1",
-    }
-    df["aisle"] = df.apply(
-        lambda r: str(r["aisle"]).strip() if str(r["aisle"]).strip() not in ("", "-", "nan")
-        else category_aisles.get(str(r["category"]).strip().lower(), "U1"),
-        axis=1,
-    )
+    df["aisle"] = df["aisle"].replace("", "-")
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df = df.dropna(subset=["price"])
     df = df[(df["price"] >= 0) & (df["product_id"] != "") & (df["product_name"] != "")]
@@ -156,14 +142,30 @@ def prepare_catalogue(df):
 
 
 def load_default_catalogue():
-    if CATALOGUE_FILE.exists():
+    st.session_state.catalogue_note = ""
+    problems = []
+    others = sorted(q for q in CATALOGUE_FILE.parent.glob("*.csv") if q != CATALOGUE_FILE)
+    for path in [CATALOGUE_FILE] + others:
+        if not path.exists():
+            problems.append(f"{path.name} was not found")
+            continue
         try:
-            df = prepare_catalogue(pd.read_csv(CATALOGUE_FILE))
-            if not df.empty:
-                return df
-        except Exception:
-            pass
-    return prepare_catalogue(pd.DataFrame(DEFAULT_PRODUCTS))
+            df = prepare_catalogue(pd.read_csv(path))
+        except Exception as exc:
+            problems.append(f"{path.name} could not be read ({exc})")
+            continue
+        if df.empty:
+            problems.append(f"{path.name} has no usable rows")
+            continue
+        if path != CATALOGUE_FILE:
+            st.session_state.catalogue_note = f"{CATALOGUE_FILE.name} was not found, so {path.name} is being used instead."
+            st.session_state.catalogue_note_n = len(df)
+        return df
+    df = prepare_catalogue(pd.DataFrame(DEFAULT_PRODUCTS))
+    st.session_state.catalogue_note = ("Showing the small demo list because " + "; ".join(problems) +
+                                       f". Put {CATALOGUE_FILE.name} in the same GitHub folder as app.py.")
+    st.session_state.catalogue_note_n = len(df)
+    return df
 
 
 def rupees(amount):
@@ -187,7 +189,6 @@ if "page" not in st.session_state:
 for _k, _v in {
     "user": None, "family": None, "scope": "me", "scope_choice": "Personal",
     "wallet": 0.0, "cal_limit": 5000.0, "orders": [], "txns": [], "chat": [], "last_saved": None,
-    "home_expiry_items": [],
 }.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -683,7 +684,7 @@ def do_logout():
     ss = st.session_state
     ss.user, ss.family, ss.scope, ss.scope_choice = None, None, "me", "Personal"
     ss.cart, ss.budget, ss.wallet, ss.cal_limit = {}, 2000.0, 0.0, 5000.0
-    ss.orders, ss.txns, ss.last_saved = [], [], None
+    ss.orders, ss.txns, ss.last_saved, ss.receipt = [], [], None, None
 
 
 def create_family():
@@ -738,23 +739,51 @@ def topup():
     persist()
 
 
-def pay_from_wallet():
+def build_receipt(order):
+    line = "-" * 34
+    out = ["SMARTCART BILL", f"Order: {order['id']}", f"Date: {order['when']}", f"Paid by: {order['method']}", line]
+    for pid, qty in order["items"].items():
+        p = product_by_id(pid)
+        if p is not None:
+            out.append(f"{p['product_name']} ({p['pack_size']}) x{qty}")
+            offer = offer_label(p.get("offer", ""))
+            out.append(f"    {rupees(line_cost(p, qty))}" + (f"  [{offer}]" if offer else ""))
+    out += [line, f"You saved: {rupees(order['saved'])}", f"TOTAL: {rupees(order['total'])}", line,
+            "Demo bill. No real payment was made."]
+    return "\n".join(out)
+
+
+def pay_now():
     ss = st.session_state
     total = cart_total()
-    if not ss.user or not ss.cart:
+    method = ss.get("pay_method", "Wallet")
+    if not ss.cart:
         return
-    if total > float(ss.wallet) + 1e-9:
-        ss.pay_msg = ("err", "Not enough money in the wallet.")
+    if method == "Wallet":
+        if not ss.user:
+            ss.pay_msg = ("err", "Log in to pay from your wallet.")
+            return
+        if total > float(ss.wallet) + 1e-9:
+            ss.pay_msg = ("err", "Not enough money in the wallet.")
+            return
+    if method == "UPI" and not re.fullmatch(r"[\w.\-]{2,}@[A-Za-z]{2,}", ss.get("upi_id", "").strip()):
+        ss.pay_msg = ("err", "Enter a valid UPI ID such as name@bank.")
         return
     saved = cart_savings()
     n = sum(ss.cart.values())
-    ss.wallet = round(float(ss.wallet) - total, 2)
-    ss.orders.append({"when": _now(), "total": round(total, 2), "saved": round(saved, 2),
-                      "by": ss.user, "items": {str(k): int(v) for k, v in ss.cart.items()}})
-    ss.txns.append({"when": _now(), "type": "purchase", "amount": -round(total, 2), "by": ss.user,
-                    "note": f"{n} items"})
+    order = {"id": "SC" + datetime.now(IST).strftime("%y%m%d%H%M%S"), "when": _now(), "method": method,
+             "total": round(total, 2), "saved": round(saved, 2), "by": ss.user or "guest",
+             "items": {str(k): int(v) for k, v in ss.cart.items()}}
+    msg = f"Payment of {rupees(total)} received by {method}. Order {order['id']}."
+    if method == "Wallet":
+        ss.wallet = round(float(ss.wallet) - total, 2)
+        ss.txns.append({"when": _now(), "type": "purchase", "amount": -round(total, 2), "by": ss.user,
+                        "note": f"{n} items, order {order['id']}"})
+        msg += f" Wallet balance left: {rupees(ss.wallet)}."
+    ss.orders.append(order)
+    ss.receipt = build_receipt(order)
     ss.cart = {}
-    ss.pay_msg = ("ok", f"Paid {rupees(total)} from your wallet. Balance left: {rupees(ss.wallet)}.")
+    ss.pay_msg = ("ok", msg)
     persist()
 
 
@@ -1004,6 +1033,52 @@ RECIPES = {
     "Veg sandwich": {"aliases": ["sandwich", "bread sandwich"], "items": [
         ("white bread", True), ("butter (salted)", False), ("cheese slices", False), ("cucumber", False),
         ("tomato", False), ("onion", False), ("mayonnaise", False), ("black pepper", False)]},
+    "Pancakes": {"aliases": ["pancake", "crepe", "crepes"], "items": [
+        ("maida", True), ("egg", True), ("milk (full cream)", True), ("sugar", False), ("butter (salted)", False),
+        ("baking powder", False), ("honey", False)]},
+    "Cake": {"aliases": ["vanilla cake", "plum cake", "sponge cake", "birthday cake", "chocolate cake", "cupcake"], "items": [
+        ("maida", True), ("sugar", True), ("egg", True), ("butter (salted)", False), ("milk (full cream)", False),
+        ("baking powder", False), ("vanilla essence", False), ("cocoa powder", False)]},
+    "Fried rice": {"aliases": ["veg fried rice", "egg fried rice"], "items": [
+        ("basmati rice", True), ("carrot", False), ("beans", False), ("onion", False), ("capsicum", False),
+        ("spring onion", False), ("garlic", False), ("soy sauce", False), ("egg", False),
+        ("sunflower oil", False), ("black pepper", False), ("salt", False)]},
+    "Veg noodles": {"aliases": ["noodles", "hakka noodles", "chow mein", "maggi"], "items": [
+        ("noodles", True), ("carrot", False), ("capsicum", False), ("cabbage", False), ("onion", False),
+        ("garlic", False), ("soy sauce", False), ("vinegar", False), ("sunflower oil", False),
+        ("black pepper", False), ("salt", False)]},
+    "Curd rice": {"aliases": ["thayir sadam", "perugu annam"], "items": [
+        ("raw rice", True), ("curd", True), ("milk (full cream)", False), ("green chilli", False), ("ginger", False),
+        ("mustard seeds", False), ("curry leaves", False), ("coriander leaves", False), ("salt", False)]},
+    "Lemon rice": {"aliases": ["chitranna"], "items": [
+        ("raw rice", True), ("lemon", False), ("green chilli", False), ("curry leaves", False),
+        ("mustard seeds", False), ("turmeric powder", False), ("roasted peanuts", False),
+        ("sunflower oil", False), ("salt", False)]},
+    "Khichdi": {"aliases": ["dal khichdi", "moong khichdi"], "items": [
+        ("raw rice", True), ("moong dal", True), ("ghee", False), ("cumin seeds", False),
+        ("turmeric powder", False), ("ginger", False), ("salt", False)]},
+    "Aloo paratha": {"aliases": ["paratha", "stuffed paratha"], "items": [
+        ("wheat flour", True), ("potato", True), ("green chilli", False), ("coriander leaves", False),
+        ("cumin seeds", False), ("ghee", False), ("curd", False), ("salt", False)]},
+    "Suji halwa": {"aliases": ["sooji halwa", "rava kesari", "kesari", "halwa"], "items": [
+        ("rava", True), ("sugar", True), ("ghee", False), ("cashew nuts", False), ("raisins", False),
+        ("cardamom", False), ("milk (full cream)", False)]},
+    "Masala chai": {"aliases": ["chai", "tea"], "items": [
+        ("tea", False), ("milk (full cream)", True), ("sugar", False), ("ginger", False), ("cardamom", False)]},
+    "Banana milkshake": {"aliases": ["milkshake", "banana shake", "shake"], "items": [
+        ("banana", True), ("milk (full cream)", True), ("sugar", False), ("ice cream", False)]},
+    "Veg pizza": {"aliases": ["pizza", "margherita pizza"], "items": [
+        ("pizza base", True), ("pizza sauce", False), ("mozzarella cheese", True), ("capsicum", False),
+        ("onion", False), ("olive oil", False)]},
+    "Veg burger": {"aliases": ["burger", "burgers"], "items": [
+        ("burger bun", True), ("potato", False), ("cheese slices", False), ("tomato", False), ("onion", False),
+        ("mayonnaise", False), ("tomato ketchup", False)]},
+    "Green salad": {"aliases": ["salad", "veg salad"], "items": [
+        ("cucumber", True), ("tomato", True), ("onion", False), ("carrot", False), ("lemon", False),
+        ("black pepper", False), ("salt", False)]},
+    "Medu vada": {"aliases": ["vada", "ulundu vada", "vadai"], "items": [
+        ("urad dal", True), ("green chilli", False), ("curry leaves", False), ("ginger", False),
+        ("black pepper", False), ("sunflower oil", False), ("salt", False)]},
 }
 
 
@@ -1016,26 +1091,90 @@ def match_recipe(text):
         names[name.lower()] = name
         for a in r["aliases"]:
             names[a.lower()] = name
-    for key, name in names.items():
-        if t == key:
-            return name
-    for key, name in names.items():
-        if len(key) >= 4 and (key in t or t in key):
-            return name
-    close = difflib.get_close_matches(t, list(names), n=1, cutoff=0.6)
+    if t in names:
+        return names[t]
+    hits = [k for k in names if len(k) >= 4 and (k in t or (len(t) >= 4 and t in k))]
+    if hits:
+        return names[max(hits, key=len)]
+    close = difflib.get_close_matches(t, list(names), n=1, cutoff=0.82)
     return names[close[0]] if close else None
 
 
-def recipe_plan(name, servings):
+# Grams (or ml) needed per person. Main items default to 100, everything else to 20.
+PER_SERVING_G = {
+    "toor dal": 50, "moong dal": 40, "urad dal": 40, "rajma": 50, "chana": 50, "idli rice": 80, "raw rice": 70,
+    "basmati rice": 80, "pasta": 80, "poha": 60, "vermicelli": 30, "rava": 50, "wheat flour": 80, "maida": 60,
+    "paneer": 80, "chicken": 150, "sardine": 150, "bread": 60, "milk": 100, "curd": 80, "noodles": 80,
+    "egg": 60, "sugar": 30, "banana": 120, "cucumber": 60, "tomato": 50, "onion": 40, "potato": 70,
+    "carrot": 40, "beans": 40, "capsicum": 30, "brinjal": 40, "pumpkin": 50, "cabbage": 40, "drumstick": 30,
+    "raw banana": 50, "coriander leaves": 5, "curry leaves": 3, "green chilli": 5,
+}
+
+
+def pack_weight(pack):
+    """Return (amount, unit) with unit 'g' or 'ml' for packs like 500 g, 1 kg, 1 L, 6 x 70 g. None if not a weight."""
+    m = re.search(r"(?:(\d+)\s*[x×]\s*)?(\d+(?:\.\d+)?)\s*(kg|gms|gm|g|ltr|l|ml)\b", str(pack).lower())
+    if not m:
+        return None
+    n = float(m.group(2)) * (int(m.group(1)) if m.group(1) else 1)
+    unit = m.group(3)
+    if unit == "kg":
+        return n * 1000, "g"
+    if unit in ("l", "ltr"):
+        return n * 1000, "ml"
+    return n, ("ml" if unit == "ml" else "g")
+
+
+def fmt_amount(amount, unit):
+    if amount >= 1000:
+        return f"{amount / 1000:g} {'kg' if unit == 'g' else 'L'}"
+    return f"{amount:g} {unit}"
+
+
+def recipe_qty(p, kw, scales, servings):
+    """Packs to buy for this many people, plus the amount needed. Bigger groups mean more weight."""
+    per = next((v for k, v in PER_SERVING_G.items() if k in kw), 100 if scales else 20)
+    need = per * servings
+    pw = pack_weight(p["pack_size"])
+    if pw:
+        qty = math.ceil(need / pw[0])
+        if not scales:
+            qty = min(qty, max(1, math.ceil(servings / 6)))
+        return max(1, min(qty, 10)), fmt_amount(need, pw[1])
     groups = max(1, math.ceil(servings / 4))
+    return (groups if scales else 1), ""
+
+
+def recipe_plan(name, servings):
     items, missing = [], []
     for kw, scales in RECIPES[name]["items"]:
         p = find_product(kw, set())
         if p is None:
             missing.append(kw)
         else:
-            items.append({"p": p, "qty": groups if scales else 1, "note": ""})
+            qty, need = recipe_qty(p, kw, scales, servings)
+            items.append({"p": p, "qty": qty, "note": "", "need": need})
     return {"title": name, "items": items, "missing": missing, "source": "rules"}
+
+
+def generic_plan(dish):
+    """Offline fallback for dishes with no recipe: products whose names contain a word from the dish."""
+    cat = st.session_state.catalogue
+    words = [w for w in re.findall(r"[a-z]+", dish.lower()) if len(w) >= 3 and w not in ("and", "with", "the", "for")]
+    items, seen = [], set()
+    for w in words:
+        pat = re.compile(rf"(?<!\w){re.escape(w)}(?:s|es)?(?!\w)")
+        for row in cat.itertuples(index=False):
+            if row.product_id in seen or str(row.stock_status).lower() not in AVAILABLE:
+                continue
+            if pat.search(row.product_name.lower()):
+                seen.add(row.product_id)
+                items.append({"p": product_by_id(row.product_id), "qty": 1, "note": "", "need": ""})
+            if len(items) >= 8:
+                break
+    if not items:
+        return None
+    return {"title": dish, "items": items, "missing": [], "source": "search"}
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -1047,7 +1186,8 @@ def ai_recipe(dish, servings, catalogue_lines, _api_key):
         f"A customer wants to cook: {dish}, for {servings} people. "
         "Using ONLY products from the catalogue below, list the ingredients they need to buy. "
         "Skip water. List ingredients that the store does not stock under \"missing\". "
-        "Use quantity 1 pack unless the dish clearly needs more for this many servings.\n"
+        "Scale quantities with the number of people: roughly 100 g of each main ingredient per person and "
+        "20 g of spices, oil and seasonings per person, choosing how many packs cover that weight (qty 1 to 10).\n"
         'Reply with JSON only: {"dish": "proper dish name", "items": [{"id": "VEG-001", "qty": 1, '
         '"note": "short role, 5 words max"}], "missing": ["ingredient name"]}\n\n'
         "Catalogue (id|name|pack|price):\n" + "\n".join(catalogue_lines)
@@ -1067,6 +1207,7 @@ def ai_recipe(dish, servings, catalogue_lines, _api_key):
 
 def ai_plan(dish, servings):
     key = get_api_key()
+    st.session_state.ai_error = None
     if not (key and st.session_state.get("use_ai")):
         return None
     cat = st.session_state.catalogue
@@ -1074,13 +1215,14 @@ def ai_plan(dish, servings):
     lines = tuple(f"{r.product_id}|{r.product_name}|{r.pack_size}|{r.price:g}" for r in avail.itertuples(index=False))
     try:
         title, raw, missing = ai_recipe(dish, servings, lines, key)
-    except Exception:
+    except Exception as exc:
+        st.session_state.ai_error = f"{type(exc).__name__}: {str(exc)[:150]}"
         return None
     items = []
     for pid, qty, note in raw:
         p = product_by_id(pid)
         if p is not None and str(p["stock_status"]).lower() in AVAILABLE:
-            items.append({"p": p, "qty": qty, "note": note})
+            items.append({"p": p, "qty": qty, "note": note, "need": ""})
     if not items:
         return None
     return {"title": title, "items": items, "missing": missing, "source": "ai"}
@@ -1226,6 +1368,9 @@ if total > budget:
 elif item_count and remaining <= budget * 0.10:
     st.warning("You're close to your budget limit. Check the total before adding more.")
 
+if st.session_state.get("catalogue_note") and len(st.session_state.catalogue) == st.session_state.get("catalogue_note_n"):
+    st.warning(st.session_state.catalogue_note)
+
 junk_rows = junk_breakdown()
 junk = sum(k for _, k in junk_rows)
 cal_limit = float(st.session_state.cal_limit)
@@ -1238,20 +1383,12 @@ if junk_rows and cal_limit > 0:
         st.warning(f"🍟 Snacks and sweets are at about {junk:,.0f} of your {cal_limit:,.0f} kcal limit. "
                    f"The biggest contributors: {top}.")
 
-tab_shop, tab_cart, tab_cook, tab_chat, tab_expiry, tab_catalogue, tab_how = st.tabs(
-    ["Shop", f"My cart ({item_count})", "Cook a dish", "Ask AI", "Expiry tracker", "Product catalogue", "How it works"]
+tab_shop, tab_cart, tab_cook, tab_chat, tab_catalogue, tab_how = st.tabs(
+    ["Shop", f"My cart ({item_count})", "Cook a dish", "Ask AI", "Product catalogue", "How it works"]
 )
 
 # ---------- Shop ----------
 with tab_shop:
-    # Warn before shopping for products that the user already has at home.
-    today = date.today()
-    expiry_items = st.session_state.get("home_expiry_items", [])
-    if expiry_items:
-        soon = [x for x in expiry_items if x.get("expiry") and (x["expiry"] - today).days <= 2 and (x["expiry"] - today).days >= 0]
-        if soon:
-            for x in soon:
-                st.warning(f"Expiry reminder: You have {x['name']} at home ({x['quantity']}). It expires on {x['expiry']}. Consider using it soon before buying more.")
     notice = st.session_state.pop("notice", None)
     if notice:
         st.warning(notice["msg"])
@@ -1336,6 +1473,10 @@ with tab_cart:
     _pm = st.session_state.pop("pay_msg", None)
     if _pm:
         (st.success if _pm[0] == "ok" else st.error)(_pm[1])
+    if st.session_state.get("receipt"):
+        with st.expander("View and download your bill", expanded=bool(_pm and _pm[0] == "ok")):
+            st.code(st.session_state.receipt, language=None)
+            st.download_button("Download bill (.txt)", st.session_state.receipt, file_name="smartcart_bill.txt")
     if not st.session_state.cart:
         st.info("Your cart is empty. Add products from the Shop tab or enter a product code.")
     else:
@@ -1388,18 +1529,31 @@ with tab_cart:
             st.session_state.cart = {}
             st.rerun()
 
-        st.subheader("Pay")
-        if not st.session_state.user:
-            st.info("Log in from the sidebar to pay from your wallet.")
+        st.subheader("Pay your bill")
+        st.radio("Payment method", ["Wallet", "UPI", "Card", "Cash on delivery"], key="pay_method", horizontal=True)
+        method = st.session_state.pay_method
+        can_pay = True
+        if method == "Wallet":
+            if not st.session_state.user:
+                st.info("Log in from the sidebar to pay from your wallet.")
+                can_pay = False
+            else:
+                wallet = float(st.session_state.wallet)
+                w1, w2 = st.columns(2)
+                w1.metric("Wallet balance", rupees(wallet))
+                w2.metric("Balance after paying", rupees(wallet - total) if wallet >= total else "Not enough")
+                if wallet < total:
+                    st.warning(f"Your wallet is {rupees(total - wallet)} short. Add money from the sidebar.")
+                    can_pay = False
+        elif method == "UPI":
+            st.text_input("Your UPI ID", placeholder="name@bank", key="upi_id")
+            st.caption("Demo only: no money moves. A live version needs a payment gateway such as Razorpay.")
+        elif method == "Card":
+            st.caption("Demo only: no card details are collected and no money moves.")
         else:
-            wallet = float(st.session_state.wallet)
-            w1, w2 = st.columns(2)
-            w1.metric("Wallet balance", rupees(wallet))
-            w2.metric("Balance after paying", rupees(wallet - total) if wallet >= total else "Not enough")
-            if wallet < total:
-                st.warning(f"Your wallet is {rupees(total - wallet)} short. Add money from the sidebar.")
-            st.button(f"Pay {rupees(total)} from wallet", type="primary", on_click=pay_from_wallet,
-                      disabled=wallet < total - 1e-9, use_container_width=True)
+            st.caption("You pay in cash when the order is delivered.")
+        st.button(f"Pay {rupees(total)}" + (" from wallet" if method == "Wallet" else f" by {method}"),
+                  type="primary", on_click=pay_now, disabled=not can_pay, use_container_width=True)
 
         if junk_rows and cal_limit > 0:
             st.progress(min(junk / cal_limit, 1.0),
@@ -1409,6 +1563,11 @@ with tab_cart:
         render_deals("dealc")
         render_suggestions(list(st.session_state.cart.keys()), "You may also need", "recc", show_reason=True)
 
+    if st.session_state.orders:
+        with st.expander("Order history"):
+            _rows = [{k: o.get(k, "") for k in ("id", "when", "method", "total", "saved", "by")}
+                     for o in st.session_state.orders[::-1]]
+            st.dataframe(pd.DataFrame(_rows), hide_index=True, use_container_width=True)
     if st.session_state.user and st.session_state.txns:
         with st.expander("Wallet history"):
             st.dataframe(pd.DataFrame(st.session_state.txns[::-1]), hide_index=True, use_container_width=True)
@@ -1422,48 +1581,53 @@ with tab_cook:
     if done:
         st.success(done)
 
-    k1, k2 = st.columns([3, 1])
-    dish_text = k1.text_input("What are you cooking?", placeholder="sambar, chicken biryani, avial, payasam",
-                              key="dish_text")
-    servings = int(k2.number_input("Servings", min_value=1, max_value=20, value=4, step=1, key="servings"))
-    pick = st.selectbox("Or pick a dish", ["Choose a dish"] + sorted(RECIPES), key="dish_pick")
+    with st.form("cook_form"):
+        dish_text = st.text_input("What are you cooking?", placeholder="sambar, chicken biryani, avial, payasam",
+                                  key="dish_text")
+        st.form_submit_button("Show ingredients", use_container_width=True)
+    servings = int(st.number_input("Servings (more people means more weight)", min_value=1, max_value=20, value=4,
+                                   step=1, key="servings"))
+    pick = st.selectbox("Or pick from the list (not needed if you type a dish above)",
+                        ["Choose a dish"] + sorted(RECIPES), key="dish_pick")
 
     plan = None
     if dish_text.strip():
         name = match_recipe(dish_text)
-        plan = recipe_plan(name, servings) if name else ai_plan(dish_text.strip(), servings)
-        if plan is None:
-            st.info("This dish is not in the built-in recipe list, or AI planning is not configured. "
-                    "To support dishes beyond the built-in list, add an ANTHROPIC_API_KEY in Streamlit "
-                    "App settings → Secrets and enable Use AI. The ingredient list will only match products "
-                    "available in your catalogue.")
+        if name:
+            plan = recipe_plan(name, servings)
+            if name.lower() != dish_text.strip().lower():
+                st.caption(f'You typed "{dish_text.strip()}", so showing the recipe for {name}.')
+        else:
+            plan = ai_plan(dish_text.strip(), servings)
+            if plan is None:
+                if not get_api_key():
+                    why = "AI is not set up (no ANTHROPIC_API_KEY secret), so only built-in dishes can be planned."
+                elif not st.session_state.get("use_ai"):
+                    why = "AI suggestions are switched off in the sidebar."
+                else:
+                    why = f"AI could not plan this dish ({st.session_state.get('ai_error') or 'no matching products'})."
+                plan = generic_plan(dish_text.strip())
+                if plan:
+                    st.info(why + " Showing the closest products in the store instead.")
+                else:
+                    st.warning(why + " No products in the store match this dish. Try a dish from the list below.")
     elif pick != "Choose a dish":
         plan = recipe_plan(pick, servings)
 
     if plan:
         rnd = st.session_state.get("cook_round", 0)
         st.markdown(f'<div class="aisle">Ingredients for {html.escape(plan["title"])}, {servings} servings · '
-                    f'{"AI plan" if plan["source"] == "ai" else "Recipe plan"}</div>', unsafe_allow_html=True)
-        # Route is an aisle-order guide, not a live indoor navigation map.
-        route_rows = []
-        for it in plan["items"]:
-            aisle = str(it["p"]["aisle"])
-            category = str(it["p"]["category"])
-            pair = (aisle, category)
-            if pair not in route_rows:
-                route_rows.append(pair)
-        route_rows.sort(key=lambda x: x[0])
-        if route_rows:
-            st.info("Suggested store route: " + " → ".join(
-                f"Aisle {aisle} ({category})" for aisle, category in route_rows
-            ))
+                    f'{ {"ai": "AI plan", "rules": "Recipe plan", "search": "Closest products"}[plan["source"]] }</div>', unsafe_allow_html=True)
         chosen_lines = []
         for it in plan["items"]:
             p, qty = it["p"], it["qty"]
             pid = p["product_id"]
             in_cart = pid in st.session_state.cart
-            label = (f"{p['product_name']} · {p['pack_size']} × {qty} · "
-                     f"{rupees(line_cost(p, qty))} · Aisle {p['aisle']} ({p['category']})")
+            pw = pack_weight(p["pack_size"])
+            total = f" = {fmt_amount(pw[0] * qty, pw[1])}" if pw and qty > 1 else ""
+            label = f"{p['product_name']} · {p['pack_size']} × {qty}{total} · {rupees(line_cost(p, qty))}"
+            if it.get("need"):
+                label += f" · need about {it['need']}"
             if it["note"]:
                 label += f" · {it['note']}"
             if in_cart:
@@ -1521,75 +1685,6 @@ with tab_chat:
         st.session_state.chat = []
         st.rerun()
 
-# ---------- Expiry-aware shopping assistant ----------
-with tab_expiry:
-    st.subheader("Expiry-aware shopping assistant")
-    st.caption("Track groceries you already have at home. SmartCart will remind you when items are close to expiry so you can reduce food waste.")
-
-    with st.form("expiry_add_form", clear_on_submit=True):
-        e1, e2 = st.columns([2, 1])
-        home_name = e1.text_input("Grocery name", placeholder="Milk, tomatoes, curd, bread")
-        home_quantity = e2.text_input("Quantity at home", placeholder="1 packet / 500 g")
-        expiry_date = st.date_input("Expiry date", value=date.today() + timedelta(days=3), min_value=date.today())
-        save_expiry = st.form_submit_button("Save grocery", type="primary")
-    if save_expiry:
-        if not home_name.strip():
-            st.error("Enter the grocery name first.")
-        else:
-            st.session_state.home_expiry_items.append({
-                "name": home_name.strip(),
-                "quantity": home_quantity.strip() or "quantity not specified",
-                "expiry": expiry_date,
-            })
-            st.success(f"Saved {home_name.strip()} to your home grocery list.")
-            st.rerun()
-
-    tracked = st.session_state.get("home_expiry_items", [])
-    if tracked:
-        today = date.today()
-        st.markdown("#### Your groceries at home")
-        for idx, item in enumerate(tracked):
-            days_left = (item["expiry"] - today).days
-            left, middle, right = st.columns([3, 2, 1])
-            left.markdown(f"**{item['name']}**  ")
-            left.caption(f"Quantity: {item['quantity']}")
-            middle.write(f"Expiry: {item['expiry'].strftime('%d %b %Y')}")
-            if days_left < 0:
-                middle.error("Past expiry date")
-            elif days_left == 0:
-                middle.warning("Expires today")
-            elif days_left == 1:
-                middle.warning("Expires tomorrow")
-            elif days_left <= 3:
-                middle.warning(f"Expires in {days_left} days")
-            else:
-                middle.caption(f"{days_left} days left")
-            if right.button("Remove", key=f"expiry_remove_{idx}"):
-                st.session_state.home_expiry_items.pop(idx)
-                st.rerun()
-
-        st.divider()
-        st.markdown("#### Before you buy")
-        st.caption("Search for a product name to check whether you already have a similar grocery at home.")
-        check_name = st.text_input("Check a grocery before buying", placeholder="e.g. milk", key="expiry_check_name")
-        if check_name.strip():
-            matches = [x for x in tracked if check_name.strip().lower() in x["name"].lower() or x["name"].lower() in check_name.strip().lower()]
-            if matches:
-                for item in matches:
-                    days_left = (item["expiry"] - today).days
-                    if days_left < 0:
-                        st.error(f"You have {item['name']} at home ({item['quantity']}), but its expiry date has passed. Check the package before using it.")
-                    elif days_left == 0:
-                        st.warning(f"You already have {item['name']} at home ({item['quantity']}); it expires today. Consider using it first.")
-                    elif days_left == 1:
-                        st.warning(f"You already have {item['name']} at home ({item['quantity']}) that expires tomorrow. Consider skipping this purchase if you have enough.")
-                    else:
-                        st.info(f"You already have {item['name']} at home ({item['quantity']}); expiry date: {item['expiry']}.")
-            else:
-                st.success("No matching grocery found in your home list.")
-    else:
-        st.info("No home groceries added yet. Add items and their expiry dates above to start receiving reminders.")
-
 # ---------- Catalogue ----------
 with tab_catalogue:
     st.subheader("Product catalogue")
@@ -1624,6 +1719,8 @@ with tab_how:
 
     **Smart suggestions:** when you add an item, SmartCart suggests what usually goes with it, for example butter, peanut butter, chocolate spread and jam for bread, or pens and pencils for a notebook. With an API key it uses Claude to choose from your catalogue. Without one it uses built-in pairing rules.
 
+    **Bill payment:** choose Wallet, UPI, Card or Cash on delivery, pay, and get a bill you can view and download. Only the wallet and orders are saved; UPI and card are demo payments.
+
     **Accounts and wallet:** sign up to save your cart, budget, wallet and order history. Add money to the wallet in the sidebar and pay from it at checkout, so there is no separate payment step. The wallet in this demo is simulated.
 
     **Family plan:** create a family and share the code. Members can switch to a shared cart and wallet.
@@ -1642,3 +1739,9 @@ with tab_how:
 
 # ---------- Save progress ----------
 persist()
+
+  
+        
+               
+   
+    
